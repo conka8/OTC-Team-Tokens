@@ -364,10 +364,6 @@ btcli wallet recycle --wallet.name team --wallet.hotkey miner1 --amount 10
 
 ## Links
 
-* **MetaHash (SN73) Repo**: `https://github.com/fx-integral/metahash`
-* **Bittensor Docs**: `https://docs.bittensor.com/`
-* **Coldkey/Hotkey Security**: `https://docs.learnbittensor.org/getting-started/coldkey-hotkey-security/`
-
----
-
-> Want this README branded for your team (logo/colors) or split into separate guides (Quick Start vs Deep Dive)? Say the word and we’ll tailor it.
+* **MetaHash (SN73) Repo**: https://github.com/fx-integral/metahash/
+* **Bittensor Docs**: https://docs.bittensor.com/
+* **Coldkey/Hotkey Security**: https://docs.learnbittensor.org/getting-started/coldkey-hotkey-security/
