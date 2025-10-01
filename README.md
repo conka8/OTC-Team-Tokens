@@ -1,202 +1,103 @@
-# MetaHash SN73 — Team OTC Sell Guide (Miner Onboarding → TAO)
+# MetaHash SN73 — Team OTC Sell Guide
 
-**Goal:** Start with **Team Tokens (α)** in your team wallet (e.g., SN20). End with **TAO in your team wallet** by selling α via **Subnet 73 (MetaHash)**.
-
-> Plain words. Tiny steps. Copy/paste where possible.
+> This page is for teams holding α (team tokens, e.g., SN20) who want to sell OTC-style through **Subnet 73**. Start with α in your wallet, end with TAO in your coldkey. Each step is literal, so your team can follow without guessing.
 
 ---
 
-## TL;DR (Super Simple)
+## Quick summary: what this guide does
 
-1. **Make wallet.** Coldkey (keeps TAO). Hotkey (does work).
-2. **Put a little TAO** in **coldkey** (fees to register & run).
-3. **Register hotkey on SN73.** (So you can bid.)
-4. **Hold α** (team tokens) in **source hotkeys** you control.
-5. **Run the SN73 miner.** It sends **bids** like: `(subnet_id, α_amount, discount_bps)`.
-6. **Wait for `Win`.** It shows a **pay window** `[as, de]` (block range).
-7. **Send α** to the **treasury** **within the window**.
-8. **Validator checks & settles.** You get **weights → emissions**.
-9. Emissions become **staked TAO on your hotkey**.
-10. **Unstake/Recycle** → **TAO liquid** on your **coldkey**.
-
-**You traded α → TAO** using the SN73 auction. That’s OTC-like, but automated and safe.
+* **Explains α → TAO via SN73 auction** in dumb-simple words.
+* **Covers miner onboarding**: make wallet, register hotkey, run miner with bids, handle invoices.
+* **Ends with TAO in your coldkey**: after emissions → unstake/recycle.
 
 ---
 
-## What You Need
+## Role snapshots
 
-* **Machine**: Linux VPS is fine.
-* **Python 3.10+** and `venv`.
-* **MetaHash code**: `https://github.com/fx-integral/metahash`
-* **btcli** (Bittensor CLI) on your box.
-* **TAO**: a tiny amount on **coldkey** for fees.
-* **α**: your Team Tokens on **source hotkeys** (these will fund the payments when you win bids).
+### Teams
 
-> Note: Validators only accept α sent to **whitelisted treasuries**. The list lives in `metahash/treasuries.py`.
+* **Hold α in source hotkeys**.
+* **Run SN73 miner** with bids `(subnet_id, α_amount, discount_bps)`.
+* **Pay invoices** inside `[as,de]` window → treasury.
+* **Unstake emissions** later → TAO on coldkey.
+
+### Validators
+
+* **Run auction → clearing → commitments → settlement**.
+* **Whitelist treasuries** in `metahash/treasuries.py`.
+* **Publish commitments** on-chain (CID) + payload to IPFS.
+
+### Treasury
+
+* **Receives α payments** during pay windows.
+* **Only whitelisted addresses count**.
 
 ---
 
-## Quick Install (Miner)
+## Auction lifecycle (team perspective)
+
+1. **Auction start (epoch e)** – Validator signals auction is open.
+2. **Submit bids** – Your miner sends `(subnet_id, α_amount, discount_bps)`.
+3. **Accept / Win** – Validator accepts if valid; sends `Win` with pay window `[as, de]`.
+4. **Pay α (epoch e+1)** – Send α from your source hotkeys to treasury within window.
+5. **Validator records** – Commitment on-chain (CID) + payload in IPFS.
+6. **Settlement (epoch e+2)** – Validator checks α, burns underfill, sets weights, emissions → your hotkey.
+7. **Unstake/Recycle** – Move TAO from hotkey stake → coldkey liquid.
+
+---
+
+## Flow diagram (ASCII)
+
+```
+Team α  ──► SN73 Miner (your hotkey)
+           │   send bids
+           ▼
+      SN73 Validator Auction ──► Win + Pay Window [as,de]
+           │                          ▲
+           │ verify α paid to Treasury │
+           ▼                          │
+      Settlement → On-Chain Commit (CID → Blockchain, Payload → IPFS)
+           │
+           ▼
+      Set Weights → Emissions (TAO to your hotkey stake)
+           ▼
+   Unstake / Recycle → TAO liquid on your coldkey
+```
+
+---
+
+## Step-by-step (literal)
+
+### 0. Install
 
 ```bash
-# Get code
-git clone https://github.com/fx-integral/metahash.git
-cd metahash
-
-# Python env
+git clone https://github.com/fx-integral/metahash.git && cd metahash
 python -m venv .venv && source .venv/bin/activate
-pip install -U pip wheel uv
-uv pip install -e .
-
-# Env file
+pip install -U pip wheel uv && uv pip install -e .
 cp .env.template .env
-# Edit .env → set WALLET_PASSWORD (and BITTENSOR_NETWORK if needed)
 ```
 
----
-
-## Make Wallet & Hotkey; Register on SN73
+### 1. Wallets
 
 ```bash
-# Create coldkey (stores TAO)
 btcli wallet new_coldkey --wallet.name team
-
-# Create hotkey (does work)
 btcli wallet new_hotkey --wallet.name team --wallet.hotkey miner1
-
-# Fund coldkey with a little TAO for fees (from exchange or another wallet)
-
-# Register hotkey on SN73 (pick the command your btcli supports)
-# Option A (newer):
-btcli subnets register --netuid 73 --wallet.name team --wallet.hotkey miner1
-# Option B (older):
-btcli register --netuid 73 --wallet.name team --wallet.hotkey miner1
 ```
 
-**Where do fees/TAO sit?**
+Fund coldkey with a little TAO (for fees).
 
-* **Registration fees** come from **coldkey**.
-* **Emissions** accrue as **staked TAO on your hotkey**. Later you **unstake/recycle** to coldkey to make TAO liquid.
-
----
-
-## Prep Your α (Team Tokens)
-
-* Put **α** (e.g., SN20 stake) into the **source hotkeys** that will fund payments.
-* You will point the miner to these with `--payment.validators <hotkeyA> <hotkeyB> ...`.
-* When you **win**, α is **sent from these hotkeys** to the **treasury** addresses.
-
-> If `STRICT_PER_SUBNET=true`, each accepted bid line must be paid on **that specific subnet**.
-
----
-
-## Bids = (subnet_id, α_amount, discount_bps)
-
-* `subnet_id`: where you supply α (ex: 20, 71, 72, 73…)
-* `α_amount`: how much α to sell on that subnet
-* `discount_bps`: **basis points** (1 bp = 0.01%). Example: `500 = 5%`, `700 = 7%`, `2500 = 25%`.
-
-**Why discount?**
-
-* Each subnet has a weight (ex: `0.8` → base 20% haircut).
-* Your `discount_bps` is the **max extra haircut** you accept **including** that base.
-* If base haircut > your max discount → **bid won’t be sent** (safety).
-
-**Examples**
-
-* Base 0.8 (20%): Your max 25% (2500 bps) → effective 5% extra → You get 75% value.
-* Base 0.95 (5%): Your max 25% → effective 20% → You get 75% value.
-* Base 0.7 (30%): Your max 25% → too high → bid not sent.
-
-**Modes**
-
-* Default: effective-discount (scaled by subnet weight).
-* Raw: add `--miner.bids.raw_discount` to use your bps as-is.
-
----
-
-## Run the Miner (Example)
+### 2. Register
 
 ```bash
-python neurons/miner.py \
-  --netuid 73 \
-  --wallet.name team \
-  --wallet.hotkey miner1 \
-  --subtensor.network "ws://YOUR_NODE:9944" \
-  --miner.bids.netuids 20 71 73 \
-  --miner.bids.amounts 100.0 50.0 25.0 \
-  --miner.bids.discounts 700 1200 2500 \
-  --axon.port 8091 \
-  --axon.external_port 8091 \
-  --logging.debug \
-  --payment.validators HOTKEY_A HOTKEY_B
+btcli subnets register --netuid 73 --wallet.name team --wallet.hotkey miner1
 ```
 
-**Notes**
+### 3. Prepare α
 
-* `--payment.validators` = the **hotkeys** that hold your α. Payments are drawn from them.
-* You can use `pm2` to keep it alive.
+* Put α (team tokens) on source hotkeys: `HOTKEY_A`, `HOTKEY_B`.
+* These hotkeys will actually send α → treasury when you win.
 
----
-
-## What Happens Each Epoch (e → e+1 → e+2)
-
-1. **e: Auction** starts; miner sends bids.
-2. **e: Clearing**; if you win → you get a **Win invoice** with a **pay window** `[as, de]` (block range in **e+1**).
-3. **e+1: Pay** α **within [as,de]** to the correct **treasury** (the miner and validator have this list). If `STRICT_PER_SUBNET=true`, pay per line per subnet.
-4. **e+2: Settlement**; validator checks payments, burns underfill to UID 0, **sets weights**.
-5. Emissions → **TAO** stake on your **hotkey**.
-6. **Unstake/Recycle** → TAO liquid on your **coldkey**.
-
-> Missed window or wrong treasury/subnet? That line is ignored. Underfill is **burned** (to UID 0). No weight for that part.
-
----
-
-## From Emissions to Liquid TAO (Cash Out)
-
-1. Check your hotkey stake growth (emissions):
-
-   ```bash
-   btcli wallet overview --wallet.name team
-   ```
-2. Move TAO from **hotkey stake** to **coldkey liquid** (command names vary by btcli version; examples):
-
-   ```bash
-   # Example: remove stake (older)
-   btcli stake remove --wallet.name team --wallet.hotkey miner1 --amount 10
-
-   # Or: recycle / unstake to coldkey (some builds)
-   btcli wallet recycle --wallet.name team --wallet.hotkey miner1 --amount 10
-   ```
-3. Now your **coldkey** has liquid TAO. Send it where you need (exchange, treasury coldkey, etc.).
-
-> Fees apply. Use small test amounts first.
-
----
-
-## OTC, but Safer (Why This Works for Teams)
-
-* You **don’t** DM strangers. You use the **auction**.
-* Your **max discount** is enforced in code.
-* α only goes to **whitelisted treasuries**.
-* If you or the chain are slow (e.g., only **few T per block**), the **window spans many blocks**, so you can still fill.
-* If you fail to fill, the missing part is **burned** (not misallocated), so totals stay honest.
-
-**Daily caps?** Budgets/limits are **config** (e.g., `AUCTION_BUDGET_ALPHA`). They can change. Check the validator’s config/announcements.
-
----
-
-## Team Tutorial: Rizzo has SN20 α → Ends with TAO (Step-by-Step)
-
-**We assume:** Rizzo controls `team` (coldkey) and `miner1` (hotkey). Rizzo has α on hotkeys `HOTKEY_A, HOTKEY_B`.
-
-### 0) Prep
-
-* Install MetaHash, make wallet/hotkey, register on SN73 (see above).
-* Put a **little TAO** on **coldkey** for fees.
-* Ensure **α** is on **HOTKEY_A/HOTKEY_B**.
-
-### 1) Start Miner & Send Bids
+### 4. Run Miner
 
 ```bash
 python neurons/miner.py \
@@ -211,79 +112,24 @@ python neurons/miner.py \
   --logging.debug
 ```
 
-* Here, Rizzo is willing to sell **100 α on SN20** with **max 9% discount**.
+### 5. Watch for `Win`
 
-### 2) Watch Logs → `Win`
+* Log shows **pay window** `[as,de]`.
+* Treasury address appears (must match `treasuries.py`).
 
-* You will see `Win` with a **pay window** `[as, de]` that lands in **epoch e+1**.
-* The log also shows the **treasury** address for the line.
+### 6. Pay α
 
-### 3) Pay α **within [as,de]**
+* Pay within `[as,de]`.
+* If you bid 100 α and only 3 α per block fit, chain fills slowly.
+* Wrong treasury/subnet = ignored.
 
-* If configured, your miner will send α from `HOTKEY_A/B` to the treasury during the window.
-* If you do it **manually**, double-check:
+### 7. Settlement
 
-  * **Subnet** is correct (SN20 line pays on SN20).
-  * **Treasury address** matches `metahash/treasuries.py`.
-  * Amounts match your **accepted** line(s).
+* Validator checks payments.
+* Burns underfill.
+* Sets weights → emissions.
 
-### 4) Settlement (e+2)
-
-* Validator scans chain, merges windows, applies `STRICT_PER_SUBNET` if set.
-* Any **underfill** gets **burned**.
-* Validator **sets weights** for your hotkey.
-
-### 5) Emissions → Unstake → TAO on Coldkey
-
-* Emissions appear as **staked TAO on `miner1`**.
-* Use **unstake/recycle** to move to **coldkey**.
-
-**Done:** Rizzo started with **SN20 α** and ended with **TAO on coldkey**.
-
----
-
-## Copy/Paste Blocks
-
-**Install**
-
-```bash
-git clone https://github.com/fx-integral/metahash.git && cd metahash
-python -m venv .venv && source .venv/bin/activate
-pip install -U pip wheel uv && uv pip install -e .
-cp .env.template .env
-```
-
-**Wallets**
-
-```bash
-btcli wallet new_coldkey --wallet.name team
-btcli wallet new_hotkey --wallet.name team --wallet.hotkey miner1
-```
-
-**Register**
-
-```bash
-btcli subnets register --netuid 73 --wallet.name team --wallet.hotkey miner1
-# or
-btcli register --netuid 73 --wallet.name team --wallet.hotkey miner1
-```
-
-**Run miner**
-
-```bash
-python neurons/miner.py \
-  --netuid 73 \
-  --wallet.name team \
-  --wallet.hotkey miner1 \
-  --subtensor.network "ws://YOUR_NODE:9944" \
-  --miner.bids.netuids 20 71 73 \
-  --miner.bids.amounts 100.0 50.0 25.0 \
-  --miner.bids.discounts 900 1200 2500 \
-  --payment.validators HOTKEY_A HOTKEY_B \
-  --logging.debug
-```
-
-**Unstake/Recycle**
+### 8. Get TAO
 
 ```bash
 btcli wallet overview --wallet.name team
@@ -292,78 +138,56 @@ btcli stake remove --wallet.name team --wallet.hotkey miner1 --amount 10
 btcli wallet recycle --wallet.name team --wallet.hotkey miner1 --amount 10
 ```
 
----
-
-## Micro-Explanations (Short Words)
-
-* **Coldkey**: your safe wallet. Holds TAO (liquid). Pays fees.
-* **Hotkey**: your worker. Gets emissions (staked TAO).
-* **α (alpha)**: the team token you sell (per subnet).
-* **Discount bps**: big number form of percent. 100 bps = 1%.
-* **Auction**: where you offer α at your max discount.
-* **Win**: validator accepted your line(s). You must pay α in time.
-* **[as,de]**: pay window in blocks. Pay only inside this.
-* **Treasury**: safe address set by validator. Only pay there.
-* **Burn**: underfill is destroyed (keeps math honest).
-* **Weights → Emissions**: your reward → TAO on hotkey stake.
-* **Unstake/Recycle**: move TAO from hotkey stake to coldkey.
+Now TAO liquid in coldkey.
 
 ---
 
-## Troubleshooting
+## How Auctions Work (detail for teams)
 
-**“Insufficient balance … to register neuron”**
+* **You choose maxDiscount (bps).** Example: 1000 bps = 10% max haircut.
+* **Validator compares subnet baseline haircut + slippage** vs your maxDiscount.
 
-* Put a little **TAO on your coldkey** (fees), then retry register.
+  * If total ≤ maxDiscount → your bid can be accepted.
+  * If total > maxDiscount → your bid is rejected.
+* **Accepted lines → Win invoice.** You must pay α during pay window.
+* **Payments come from your source hotkeys** (the ones listed under `--payment.validators`).
+* **Partial fills possible**: if you bid 100T but chain only clears 3T per block, it takes many blocks to fully settle. You may fill slowly until window ends.
+* **If all offers are at 20% discount but you only set 10% max** → you won’t sell. Your bid is too strict. You must either:
 
-**“No Win”**
-
-* Discount too tight? Try higher `discount_bps`.
-* Subnet limits? Try smaller `α_amount`.
-
-**“Paid but no weight”**
-
-* Did you pay **within [as,de]**?
-* Did you pay to the **right treasury** and **right subnet**?
-* Any part you missed is **burned** → no weight for that part.
-
-**“Only a few T per block land”**
-
-* That’s okay. Use the whole window. Split into more txs.
-
-**“Devnet vs Testnet vs Mainnet”**
-
-* SN73 is a **mainnet subnet**. Connect to the right node URL.
-
-**“Which wallet holds what?”**
-
-* Fees & liquid TAO: **coldkey**.
-* Emissions (staked): **hotkey**.
+  * Wait until validators accept lower discounts.
+  * Or raise your maxDiscount.
+* **Burn safety**: if you underpay, the missing part is burned. You only get emissions for the part you really paid.
 
 ---
 
-## Validator Notes (FYI)
+## Glossary (short words)
 
-* Validators publish **CID on-chain** and **full JSON to IPFS**. No catch-up.
-* `STRICT_PER_SUBNET` can be on. Then each line must be paid per subnet.
-* Reputation caps can limit per-coldkey fills.
-* `AUCTION_BUDGET_ALPHA` drives how much α is accepted per epoch.
+* **Coldkey** – safe wallet, holds TAO, pays fees.
+* **Hotkey** – worker, gets emissions (staked TAO).
+* **α** – team tokens you sell.
+* **Discount bps** – 100 bps = 1% haircut max.
+* **Win** – validator accepted, shows pay window.
+* **[as,de]** – pay window in blocks.
+* **Treasury** – whitelisted address.
+* **Burn** – missing α destroyed.
+* **Weights → Emissions** – your TAO reward.
 
 ---
 
-## Safety Checklist (Before You Bid)
+## Checklist before bidding
 
 * [ ] Coldkey funded for fees
 * [ ] Hotkey registered on SN73
 * [ ] α present on source hotkeys
 * [ ] Treasury list confirmed (`metahash/treasuries.py`)
-* [ ] Discount set to a max you accept
-* [ ] You can send during the whole window
+* [ ] Discount set (bps) at a level you accept
+* [ ] Able to pay during window
 
 ---
 
 ## Links
 
-* **MetaHash (SN73) Repo**: https://github.com/fx-integral/metahash/
-* **Bittensor Docs**: https://docs.bittensor.com/
-* **Coldkey/Hotkey Security**: https://docs.learnbittensor.org/getting-started/coldkey-hotkey-security/
+* [MetaHash SN73 Repo](https://github.com/fx-integral/metahash)
+* [Bittensor Docs](https://docs.bittensor.com/)
+* [Miner Guide](../miner.md)
+* [Validator Guide](../validator.md)
