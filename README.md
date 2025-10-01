@@ -25,21 +25,21 @@
 
 ## Picture (Flow)
 
-Reference diagram:
-
-![Flow Diagram](./3aa3cb5f-56ff-4d7a-84ec-366775ee15a3.png)
-
-### Flow Explained
-
-1. **Auction start** → Validator signals auction round.
-2. **Offer** → Miner submits bid `(subnet_id, α_amount, discount_bps)`.
-3. **Accept** → Validator accepts bid if valid.
-4. **Send funds** → Miner pays α to treasury within pay window.
-5. **Auction record** → Validator posts commitment:
-
-   * **5.1** CID hash on blockchain.
-   * **5.2** Full payload to IPFS.
-6. **Settlement** → Validator checks payments, applies burns for underfill, then sets weights → TAO emissions.
+```
+Team α  ──► SN73 Miner (your hotkey)
+           │   send bids
+           ▼
+      SN73 Validator Auction ──► Win + Pay Window [as,de]
+           │                          ▲
+           │ verify α paid to Treasury │
+           ▼                          │
+      Settlement → On-Chain Commit (CID → Blockchain, Payload → IPFS)
+           │
+           ▼
+      Set Weights → Emissions (TAO to your hotkey stake)
+           ▼
+   Unstake / Recycle → TAO liquid on your coldkey
+```
 
 ---
 
