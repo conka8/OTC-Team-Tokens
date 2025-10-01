@@ -23,26 +23,6 @@
 
 ---
 
-## Picture (Flow)
-
-```
-Team α  ──► SN73 Miner (your hotkey)
-           │   send bids
-           ▼
-      SN73 Validator Auction ──► Win + Pay Window [as,de]
-           │                          ▲
-           │ verify α paid to Treasury │
-           ▼                          │
-      Settlement → On-Chain Commit (CID → Blockchain, Payload → IPFS)
-           │
-           ▼
-      Set Weights → Emissions (TAO to your hotkey stake)
-           ▼
-   Unstake / Recycle → TAO liquid on your coldkey
-```
-
----
-
 ## What You Need
 
 * **Machine**: Linux VPS is fine.
