@@ -48,7 +48,7 @@
 
 ## Step-by-step (literal)
 
-### 0. Install
+### 1. Install
 
 ```bash
 git clone https://github.com/fx-integral/metahash.git && cd metahash
@@ -57,7 +57,7 @@ pip install -U pip wheel uv && uv pip install -e .
 cp .env.template .env
 ```
 
-### 1. Wallets
+### 2. Wallets
 
 ```bash
 btcli wallet new_coldkey --wallet.name team
@@ -66,18 +66,18 @@ btcli wallet new_hotkey --wallet.name team --wallet.hotkey miner1
 
 Fund coldkey with a little TAO (for fees).
 
-### 2. Register
+### 3. Register
 
 ```bash
 btcli subnets register --netuid 73 --wallet.name team --wallet.hotkey miner1
 ```
 
-### 3. Prepare α
+### 4. Prepare α
 
 * Put α (team tokens) on source hotkeys: `HOTKEY_A`, `HOTKEY_B`.
 * These hotkeys will actually send α → treasury when you win.
 
-### 4. Run Miner
+### 5. Run Miner
 
 ```bash
 python neurons/miner.py \
@@ -92,24 +92,24 @@ python neurons/miner.py \
   --logging.debug
 ```
 
-### 5. Watch for `Win`
+### 6. Watch for `Win`
 
 * Log shows **pay window** `[as,de]`.
 * Treasury address appears (must match `treasuries.py`).
 
-### 6. Pay α
+### 7. Pay α
 
 * Pay within `[as,de]`.
 * If you bid 100 α and only 3 α per block fit, chain fills slowly.
 * Wrong treasury/subnet = ignored.
 
-### 7. Settlement
+### 8. Settlement
 
 * Validator checks payments.
 * Burns underfill.
 * Sets weights → emissions.
 
-### 8. Get TAO
+### 9. Get TAO
 
 ```bash
 btcli wallet overview --wallet.name team
