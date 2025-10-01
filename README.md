@@ -6,7 +6,7 @@
 
 ---
 
-## TL;DR 
+## TL;DR (Super Simple)
 
 1. **Make wallet.** Coldkey (keeps TAO). Hotkey (does work).
 2. **Put a little TAO** in **coldkey** (fees to register & run).
